@@ -23,6 +23,23 @@ export default function LoginPage() {
     }
   }, [router]);
 
+  useEffect(() => {
+    if (user) {
+      if (!Cookies.get('user_session')) {
+        Cookies.set('user_session', JSON.stringify({
+          id: user.id,
+          email: user.email,
+          lastLogin: new Date().toISOString()
+        }), { 
+          expires: 7,
+          secure: window.location.protocol === 'https:',
+          sameSite: 'strict'
+        });
+      }
+      router.push("/home");
+    }
+  }, [user, router]);
+
   const handleEmailLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });

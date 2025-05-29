@@ -100,7 +100,7 @@ export default function Fees() {
       <div style={styles.navbar}>
         <div style={styles.navInner}>
           <Link href="/home" style={{ textDecoration: "none" }}>
-            <div style={styles.brand}>🏛 Vera Imperia</div>
+            <div style={styles.brand}>Home</div>
           </Link>
           <button onClick={handleLogout} style={styles.logoutButton}>
             Logout
