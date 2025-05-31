@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [signUpWithEmail, setSignUpWithEmail] = useState(false);
+  const [isClientReady, setIsClientReady] = useState(false);
 
   useEffect(() => {
     // Check for existing session cookie
@@ -37,6 +38,14 @@ export default function LoginPage() {
       router.push("/home");
     }
   }, [user, router]);
+
+  useEffect(() => {
+    // Check if Supabase client is initialized
+    if (supabase) {
+      setIsClientReady(true);
+      console.log('Supabase client initialized');
+    }
+  }, [supabase]);
 
   const handleEmailLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -68,40 +77,110 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
-    if (error) {
-      setError(error.message || "Google sign-in failed.");
+    if (!isClientReady) {
+      console.log('Waiting for Supabase client to initialize...');
+      setError("Please wait a moment and try again.");
       return;
     }
 
-    // Google OAuth will handle the session cookie setting after redirect
+    try {
+      console.log('Starting Google login process...');
+      const { data, error } = await supabase.auth.signInWithOAuth({ 
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        }
+      });
+      
+      if (error) {
+        console.error('Google sign-in error:', error);
+        setError(error.message || "Google sign-in failed.");
+        return;
+      }
+      
+      console.log('Google sign-in successful:', data);
+    } catch (err) {
+      console.error('Unexpected error during Google sign-in:', err);
+      setError("An unexpected error occurred during sign-in.");
+    }
   };
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    if (error) {
-      setError(error.message || "Sign up failed.");
-      return;
-    }
-
-    // Set session cookie for new user
-    if (data.user) {
-      Cookies.set('user_session', JSON.stringify({
-        id: data.user.id,
-        email: data.user.email,
-        lastLogin: new Date().toISOString()
-      }), { 
-        expires: 7,
-        secure: true,
-        sameSite: 'strict'
-      });
-    }
+    setError(""); // Clear any previous errors
     
-    setError("Check your email for a confirmation link!");
+    try {
+      console.log('Starting sign up process...');
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setError("Please enter a valid email address.");
+        return;
+      }
+
+      // Validate password strength
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters long.");
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            signup_date: new Date().toISOString(),
+          }
+        }
+      });
+
+      if (error) {
+        console.error('Sign up error:', error);
+        
+        // Handle specific error cases
+        if (error.message.toLowerCase().includes("already registered") ||
+            error.message.toLowerCase().includes("already exists") ||
+            error.message.toLowerCase().includes("user exists")) {
+          setError("This email is already registered. Please log in or use a different email.");
+        } else if (error.message.toLowerCase().includes("invalid email")) {
+          setError("Please enter a valid email address.");
+        } else if (error.message.toLowerCase().includes("password")) {
+          setError("Password must be at least 6 characters long.");
+        } else {
+          setError(`Sign up failed: ${error.message}`);
+        }
+        return;
+      }
+
+      // Check if signup was successful
+      if (data?.user) {
+        console.log('Sign up successful:', data);
+        // Set session cookie for new user
+        Cookies.set('user_session', JSON.stringify({
+          id: data.user.id,
+          email: data.user.email,
+          lastLogin: new Date().toISOString()
+        }), { 
+          expires: 7,
+          secure: true,
+          sameSite: 'strict'
+        });
+        
+        setError("Check your email for a confirmation link!");
+      } else {
+        console.error('No user data returned from signup');
+        setError("Sign up completed but no user data was returned. Please try logging in.");
+      }
+    } catch (err) {
+      console.error('Unexpected error during sign up:', err);
+      setError("An unexpected error occurred during sign up. Please try again.");
+    }
   };
 
   const handleLogout = async () => {
